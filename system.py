@@ -271,7 +271,8 @@ class System:
 
         side_length_a= xc-xb
         height1 = ya
-        x_a = 21/8
+        x_a = 27/8
+        y_a=5/8
 
         positions=[]
         orientation=[]
@@ -306,7 +307,7 @@ class System:
                     x = j * col_spacing - width/2 
                     y = i * row_spacing - height/2
                 else:
-                    x = (j - 1 + x_a) * col_spacing - width/2 
+                    x = (j + 1 ) * col_spacing - y_a - width/2 
                     y = (i + 0.5) * row_spacing - height/2
                 theta = 0.0 if i % 2 == 0 else math.pi  # 偶数行朝向0，奇数行朝向180度
                 # 确保三角形不会出边界
@@ -341,6 +342,72 @@ class System:
         self.simulation = hoomd.Simulation(device=self.device,seed=1)
         self.simulation.operations.integrator = self.mc
         self.simulation.create_state_from_snapshot(self.snapshot)
+        
+    def generate_system(self):
+        num_endpoint=len(self.mc.shape["A"]["vertices"])
+        endpoints_x=[]
+        endpoints_y=[]
+        for i in range(num_endpoint):
+            x,y=self.mc.shape["A"]["vertices"][i]
+            endpoints_x.append(x)
+            endpoints_y.append(y)
+        col_spacing=(max(endpoints_x)-min(endpoints_x))*1.2
+        row_spacing=(max(endpoints_y)-min(endpoints_y))*1.2
+        cols=rows=math.ceil(math.sqrt(self.num))
+        width=col_spacing*(cols+1)
+        height=row_spacing*(rows+1)
+
+        positions=[]
+        orientation=[]
+
+        count=0
+        for i in range(rows):
+            for j in range(cols):
+                if count >= self.num:
+                    break
+                x = j * col_spacing - width/2 
+                y = i * row_spacing - height/2
+                positions.append([x,y,0])
+                orientation.append([np.cos(0.0/2), 0, 0, np.sin(0.0/2)])
+                count += 1
+        print(f"成功初始化了 {len(positions)} 个有序排列粒子,盒子长{width:.2f},盒子高{height:.2f},行间距={row_spacing:.2f}, 列间距={col_spacing:.2f};现在开始压缩体系")
+        #创建一个快照
+        snapshot=hoomd.Snapshot()
+        snapshot.particles.N = self.num
+        snapshot.particles.position[:] = positions
+        snapshot.particles.orientation[:] = orientation
+        snapshot.particles.typeid[:] = [0] * self.num
+        snapshot.particles.types=['A']
+        snapshot.configuration.box=[width, height, 0, 0, 0, 0]
+        self.snapshot=snapshot
+        self.simulation = hoomd.Simulation(device=self.device,seed=1)
+        self.simulation.operations.integrator = self.mc
+        self.simulation.create_state_from_snapshot(self.snapshot)
+
+        #压缩体系
+
+        final_volume=self.simulation.state.N_particles*self.particle_area/self.packing_density
+        inverse_volume_ramp = hoomd.variant.box.InverseVolumeRamp(
+        initial_box=self.simulation.state.box,
+        final_volume=final_volume,
+        t_start=self.simulation.timestep,
+        t_ramp=20_000,
+        )
+        steps = range(0, 40000, 20)
+        y = [inverse_volume_ramp(step)[0] for step in steps]
+        box_resize = hoomd.update.BoxResize(
+            trigger=hoomd.trigger.Periodic(10),
+            box=inverse_volume_ramp,
+        )
+        self.simulation.operations.updaters.append(box_resize)
+
+        self.simulation.run(20001)
+
+        self.simulation.operations.updaters.remove(box_resize)
+
+        print(f"压缩体系完成，{len(positions)} 个有序排列粒子")
+        
+
 
     def randomizing_particles(self):
         """
