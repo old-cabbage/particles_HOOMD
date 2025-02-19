@@ -10,18 +10,19 @@ import time
 
 def main():
     #粒子总数
+    N=5000
     num_particles = 5000
     #每次开始插入之前，先对基础的系统预处理pre_random步数
-    pre_random = 20000
+    pre_random = 5000
     #粒子的总面积/盒子面积为packing_density
     packing_density_0=0.5
-    packing_density = packing_density_0 * num_particles/5000
+    packing_density = packing_density_0 * num_particles/N
     #压缩系数
     condensed_ratio=0.98
     #微小间距
     margin=0.2
     cpu=hoomd.device.CPU()
-    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.1,default_a=0.2)
+    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.1,default_a=0.2,translation_move_probability=0.2)
     mc.shape["A"] = dict(
                 vertices = [
                 (-2, 0),
@@ -30,7 +31,6 @@ def main():
                 ]
     )
     particle_area=5*math.sqrt(63)/4
-
     #创建实例
     system=System(
         num=num_particles,packing_density=packing_density,
@@ -49,9 +49,9 @@ def main():
     print(f"预热完成，耗时: {end_time - start_time:.2f} 秒")
 
     # 运行循环模拟和插入测试
-    iterations = 80000              # 循环次数
+    iterations = 1000              # 循环次数
     moves_per_cycle = 5            # 每个循环中移动的成功步数
-    insertions_per_cycle = 10000    # 每个循环中插入的粒子尝试次数
+    insertions_per_cycle = 1000    # 每个循环中插入的粒子尝试次数
 
     total_success = 0
     total_attempts = 0
@@ -70,7 +70,7 @@ def main():
         total_attempts += insertions_per_cycle
 
         # 可选：打印每个循环的结果
-        if cycle % (iterations // 100) == 0:
+        if cycle % (iterations // 10 ) == 0:
             simulation_interval_time = time.time()
             print(f"循环 {cycle}/{iterations}: 成功插入 {round(success)}/{insertions_per_cycle} 个粒子;耗时: {simulation_interval_time - simulation_start_time:.2f} 秒")
     

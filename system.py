@@ -244,7 +244,8 @@ def run_with_gpu(sequence, pre_random, real_mc_step, insert_times):
     return success_probabilities
 
 class System:
-    def __init__(self,num,packing_density,packing_density_0,particle_area,mc,condensed_ratio,margin,pre_random=10,device=cpu,sdf_mc=1000,sdf_xmax=0.1,sdf_dx=10e-4):
+    def __init__(self,num,packing_density,packing_density_0,particle_area,mc,condensed_ratio,margin,pre_random=10,
+                 device=cpu):
         self.num=num
         self.packing_density=packing_density
         self.packing_density_0=packing_density_0
@@ -256,9 +257,6 @@ class System:
         self.mc=mc
         self.condensed_ratio=condensed_ratio
         self.margin=margin
-        self.sdf_mc=sdf_mc
-        self.sdf_xmax=sdf_xmax
-        self.sdf_dx=sdf_dx
 
     def generate_particle(self):
         #生成一个有N_particles的有序粒子群
@@ -387,23 +385,35 @@ class System:
         #压缩体系
 
         final_volume=self.simulation.state.N_particles*self.particle_area/self.packing_density
-        inverse_volume_ramp = hoomd.variant.box.InverseVolumeRamp(
-        initial_box=self.simulation.state.box,
-        final_volume=final_volume,
-        t_start=self.simulation.timestep,
-        t_ramp=20_000,
-        )
-        steps = range(0, 40000, 20)
-        y = [inverse_volume_ramp(step)[0] for step in steps]
-        box_resize = hoomd.update.BoxResize(
-            trigger=hoomd.trigger.Periodic(10),
-            box=inverse_volume_ramp,
-        )
-        self.simulation.operations.updaters.append(box_resize)
+        #inverse_volume_ramp = hoomd.variant.box.InverseVolumeRamp(
+        #initial_box=self.simulation.state.box,
+        #final_volume=final_volume,
+        #t_start=self.simulation.timestep,
+        #t_ramp=20_000,
+        #)
+        #steps = range(0, 40000, 20)
+        #y = [inverse_volume_ramp(step)[0] for step in steps]
+        #box_resize = hoomd.update.BoxResize(
+        #    trigger=hoomd.trigger.Periodic(10),
+        #    box=inverse_volume_ramp,
+        #)
+        #self.simulation.operations.updaters.append(box_resize)
+        #
+        #self.simulation.run(20001)
+        #
+        #self.simulation.operations.updaters.remove(box_resize)
 
-        self.simulation.run(20001)
-
-        self.simulation.operations.updaters.remove(box_resize)
+        target_box = hoomd.variant.box.InverseVolumeRamp(
+            self.simulation.state.box, final_volume, 0, 1_000)
+        qc = hoomd.hpmc.update.QuickCompress(100, target_box)
+        count=0
+        while (
+            self.simulation.timestep < target_box.t_ramp + target_box.t_start or
+            not qc.complete):
+            self.simulation.run(10)
+            count+=1
+            if count%100==0:
+                print(f"循环{count}次")
 
         print(f"压缩体系完成，{len(positions)} 个有序排列粒子")
         
@@ -508,16 +518,16 @@ class System:
         self.success_insert = self.fv.free_volume * insert_times / self.volume
         return self.success_insert
 
-    def calculate_sdf(self):
-        self.total_sdf_sdfcompression=np.zeros(int(self.sdf_xmax/self.sdf_dx))
-        self.thispart_num=5000
-        self.generate_particle()
-        for i in range(self.sdf_mc):
-            self.randomizing_particles()
-            self.sdf_compute = hoomd.hpmc.compute.SDF(xmax=self.sdf_xmax, dx=self.sdf_dx)
+    def calculate_sdf(self,sdf_mc,sdf_xmax,sdf_dx,sdf_each_run):
+        self.total_sdf_sdfcompression=np.zeros(int(sdf_xmax/sdf_dx))
+        for i in range(sdf_mc):
+            self.simulation.run(sdf_each_run)
+            self.sdf_compute = hoomd.hpmc.compute.SDF(xmax=sdf_xmax, dx=sdf_dx)
             self.simulation.operations.computes.append(self.sdf_compute)
             self.total_sdf_sdfcompression += self.sdf_compute.sdf_compression
+            if i%(sdf_mc//10)==0:
+                print(f"循环已经进行了{i}次")
         self.total_sdf_xcompression = self.sdf_compute.x_compression
-        self.total_sdf_sdfcompression /= self.sdf_mc
+        self.total_sdf_sdfcompression /= sdf_mc
         return self.total_sdf_xcompression,self.total_sdf_sdfcompression
 
