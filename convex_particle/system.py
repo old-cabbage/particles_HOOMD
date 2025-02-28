@@ -267,8 +267,8 @@ class System:
         xb,yb=self.mc.shape["A"]["vertices"][0]
         xc,yc=self.mc.shape["A"]["vertices"][1]
 
-        side_length_a= xc-xb
-        height1 = ya
+        particle_width= xc-xb
+        particle_height = ya
         x_a = 27/8
         y_a=5/8
 
@@ -280,12 +280,14 @@ class System:
         # 计算网格间距，确保三角形之间不重叠
         # 使用更紧凑的间距以提高密度
         #row_spacing = self.condensed_ratio * unit_area/(side_length_a + self.margin)    #height1 * 0.75 + margin   紧凑行间距
-        col_spacing = side_length_a + self.margin    # 列间距保持不变
-        row_spacing = self.condensed_ratio * unit_area/(col_spacing)
+        part_area=self.particle_area*self.condensed_ratio/self.packing_density
+        expand_ratio=math.sqrt(part_area/(particle_width*particle_height))
+        col_spacing = particle_width*expand_ratio    # 列间距保持不变
+        row_spacing = particle_height*expand_ratio
 
         # 计算行列数
-        cols = int(width // col_spacing)
-        rows = int(height // row_spacing)
+        cols = round(width / col_spacing)
+        rows = round(height / row_spacing)
 
             # 计算实际总可放置粒子数量
         total_possible = cols * rows
@@ -314,19 +316,11 @@ class System:
                     positions.append([x,y,0])
                     orientation.append([np.cos(theta/2), 0, 0, np.sin(theta/2)])
                     count += 1
-        print(f"成功初始化了 {len(positions)} 个有序排列的三角形粒子（交错网格）,盒子长{width:.2f},盒子高{height:.2f},行间距={row_spacing:.2f}, 列间距={col_spacing:.2f}。")
+        print(f"成功初始化了堆叠密度为{self.packing_density_0} ,数目为 {len(positions)} 有序排列的粒子,盒子长{width:.2f},盒子高{height:.2f},行间距={row_spacing:.2f}, 列间距={col_spacing:.2f}")
 
         # 取前 N_particles 个位置
         positions = np.array(positions)  # 形状为 (N_particles, 2)
         orientation = np.array(orientation)
-
-        # 创建 GSD 帧并设置粒子属性
-        frame = gsd.hoomd.Frame()
-        frame.particles.N = self.num
-        frame.particles.position = positions  # 现在是 (N_particles, 2) 的数组
-        frame.particles.orientation = orientation
-        frame.particles.typeid = [0] * self.num
-        frame.configuration.box = [L, L, 0, 0, 0, 0]  # 注意这里的盒子尺寸
 
         #创建一个快照
         snapshot=hoomd.Snapshot()
@@ -515,7 +509,7 @@ class System:
     def random_insert(self,insert_times):
         self.fv=hoomd.hpmc.compute.FreeVolume(test_particle_type="A", num_samples=insert_times)
         self.simulation.operations.computes.append(self.fv)
-        self.success_insert = self.fv.free_volume * insert_times / self.volume
+        self.success_insert = round(self.fv.free_volume * insert_times / self.volume)
         return self.success_insert
 
     def calculate_sdf(self,sdf_mc,sdf_xmax,sdf_dx,sdf_each_run):

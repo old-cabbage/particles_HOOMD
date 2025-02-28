@@ -15,14 +15,14 @@ def main():
     #每次开始插入之前，先对基础的系统预处理pre_random步数
     pre_random = 5000
     #粒子的总面积/盒子面积为packing_density
-    packing_density_0=0.5
+    packing_density_0=0.3
     packing_density = packing_density_0 * num_particles/N
     #压缩系数
     condensed_ratio=0.98
     #微小间距
     margin=0.2
     cpu=hoomd.device.CPU()
-    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.1,default_a=0.2,translation_move_probability=0.2)
+    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.5,default_a=0.2,translation_move_probability=0.2)
     mc.shape["A"] = dict(
                 vertices = [
                 (-2, 0),
@@ -39,19 +39,21 @@ def main():
         mc=mc,condensed_ratio=condensed_ratio,margin=margin,
         pre_random=pre_random,device=cpu
     )
-    system.generate_particle()
+    system.simulation = hoomd.Simulation(device=cpu,seed=3)
+    system.simulation.operations.integrator = mc
+    system.simulation.create_state_from_gsd(filename='./gsd/P_{:.2f}_{}.gsd'.format(packing_density_0,num_particles))
 
-    print(f"\n正在预热系统，进行 {pre_random} 次移动...")
-    start_time=time.time()
-    system.randomizing_particles()
-    system.save_to_gsd()
-    end_time = time.time()
-    print(f"预热完成，耗时: {end_time - start_time:.2f} 秒")
+    #print(f"\n正在预热系统，进行 {pre_random} 次移动...")
+    #start_time=time.time()
+    #system.randomizing_particles()
+    #system.save_to_gsd()
+    #end_time = time.time()
+    #print(f"预热完成，耗时: {end_time - start_time:.2f} 秒")
 
     # 运行循环模拟和插入测试
     iterations = 1000              # 循环次数
     moves_per_cycle = 5            # 每个循环中移动的成功步数
-    insertions_per_cycle = 1000    # 每个循环中插入的粒子尝试次数
+    insertions_per_cycle = 100000    # 每个循环中插入的粒子尝试次数
 
     total_success = 0
     total_attempts = 0
@@ -72,7 +74,7 @@ def main():
         # 可选：打印每个循环的结果
         if cycle % (iterations // 10 ) == 0:
             simulation_interval_time = time.time()
-            print(f"循环 {cycle}/{iterations}: 成功插入 {round(success)}/{insertions_per_cycle} 个粒子;耗时: {simulation_interval_time - simulation_start_time:.2f} 秒")
+            print(f"循环 {cycle}/{iterations}: 成功插入 {success}/{insertions_per_cycle} 个粒子;耗时: {simulation_interval_time - simulation_start_time:.2f} 秒")
     
     simulation_end_time = time.time()
     print(f"\n堆叠密度为{packing_density_0}，粒子数为{num_particles}的循环模拟和插入测试完成，耗时: {simulation_end_time - simulation_start_time:.2f} 秒")
