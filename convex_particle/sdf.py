@@ -4,61 +4,80 @@ import numpy as np
 import itertools
 import gsd.hoomd
 import matplotlib.pyplot as plt
-from multiprocessing import Pool
 from system import System
 import time
+from multiprocessing import Pool, cpu_count
+import random
 
+def task(n):
+        #粒子总数
+        N=5000
+        num_particles = 5000
+        #每次开始插入之前，先对基础的系统预处理pre_random步数
+        pre_random = 5000
+        #粒子的总面积/盒子面积为packing_density
+        packing_density_0=0.3
+        packing_density = packing_density_0 * num_particles/N
+        #压缩系数
+        condensed_ratio=0.98
+        #微小间距
+        margin=0.2
+        
+        divice=hoomd.device.CPU()
+        mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=3,default_a=0.5)
+        mc.shape["A"] = dict(
+                        vertices = [
+                        (-2, 0),
+                        (2, 0),
+                        (11/8, 5*math.sqrt(63)/8),
+                        ]
+            )
+        particle_area=5*math.sqrt(63)/4
+
+        system=System(
+                num=num_particles,packing_density=packing_density,
+                packing_density_0=packing_density_0,
+                particle_area=particle_area,
+                mc=mc,condensed_ratio=condensed_ratio,margin=margin,
+                pre_random=pre_random,device=divice
+            )
+
+        system.simulation = hoomd.Simulation(device=divice,seed=random.randint(1,10+n))
+        system.simulation.operations.integrator = mc
+        system.simulation.create_state_from_gsd(filename='./gsd/P_{:.2f}_{}.gsd'.format(packing_density_0,num_particles))
+
+        sdf_mc=1000
+        sdf_xmax=0.01
+        sdf_dx=1e-4
+        sdf_each_run=5
+
+        total_sdf_xcompression,total_sdf_sdfcompression=system.calculate_sdf(sdf_mc,sdf_xmax,sdf_dx,sdf_each_run)
+
+        return total_sdf_xcompression,total_sdf_sdfcompression
 
 def main():
 
-    #粒子总数
-    N=5000
-    num_particles = 5000
-    #每次开始插入之前，先对基础的系统预处理pre_random步数
-    pre_random = 5000
-    #粒子的总面积/盒子面积为packing_density
-    packing_density_0=0.5
-    packing_density = packing_density_0 * num_particles/N
-    #压缩系数
-    condensed_ratio=0.98
-    #微小间距
-    margin=0.2
-    cpu=hoomd.device.CPU()
-    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.1,default_a=0.2,translation_move_probability=0.2)
-    cpu=hoomd.device.CPU()
-    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.1,default_a=0.2)
-    mc.shape["A"] = dict(
-                    vertices = [
-                    (-2, 0),
-                    (2, 0),
-                    (11/8, 5*math.sqrt(63)/8),
-                    ]
-        )
-    particle_area=5*math.sqrt(63)/4
+    packing_density_0=0.3
+    
+    if __name__ == '__main__':
+        data = list(range(100)) 
+        num_workers = cpu_count()
 
-    system=System(
-            num=num_particles,packing_density=packing_density,
-            packing_density_0=packing_density_0,
-            particle_area=particle_area,
-            mc=mc,condensed_ratio=condensed_ratio,margin=margin,
-            pre_random=pre_random,device=cpu
-        )
+        with Pool(processes=num_workers) as pool:
+            results = pool.map(task, data)
+    
 
-    system.generate_particle()
 
-    print(f"\n正在预热系统，进行 {pre_random} 次移动...")
-    start_time=time.time()
-    system.randomizing_particles()
-    system.save_to_gsd()
-    end_time = time.time()
-    print(f"预热完成，耗时: {end_time - start_time:.2f} 秒")
+    total_sdf_xcompression=np.zeros(100)
+    total_sdf_sdfcompression=np.zeros(100)
+    
+    for i in range(len(results)):
+        interval_sdf_xcompression,interval_sdf_sdfcompression=results[i]
+        total_sdf_xcompression += interval_sdf_xcompression
+        total_sdf_sdfcompression += interval_sdf_sdfcompression
 
-    sdf_mc=500000
-    sdf_xmax=0.05
-    sdf_dx=10e-5
-    sdf_each_run=5
-
-    total_sdf_xcompression,total_sdf_sdfcompression=system.calculate_sdf(sdf_mc,sdf_xmax,sdf_dx,sdf_each_run)
+    total_sdf_xcompression/=len(results)
+    total_sdf_sdfcompression/=len(results)
 
     print(total_sdf_xcompression,total_sdf_sdfcompression)
 
