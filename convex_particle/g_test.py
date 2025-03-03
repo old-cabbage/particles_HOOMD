@@ -17,10 +17,10 @@ def main():
     packing_density_0=0.1
     #packing_density = packing_density_0 * num_particles/5000
     #压缩系数
-    condensed_ratio=0.97
+    condensed_ratio=0.9
     #微小间距
     margin=0.2
-    cpu=hoomd.device.CPU()
+    gpu=hoomd.device.GPU()
     shape='A'
     mc = hoomd.hpmc.integrate.SimplePolygon(default_d=0.5,default_a=0.2)
     mc.shape["A"] = dict(
@@ -41,7 +41,7 @@ def main():
         packing_density_0=packing_density_0,
         particle_area=particle_area,
         mc=mc,condensed_ratio=condensed_ratio,margin=margin,
-        pre_random=pre_random,device=cpu
+        pre_random=pre_random,device=gpu
     )
     system.generate_particle()
 

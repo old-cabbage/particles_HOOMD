@@ -514,13 +514,15 @@ class System:
 
     def calculate_sdf(self,sdf_mc,sdf_xmax,sdf_dx,sdf_each_run):
         self.total_sdf_sdfcompression=np.zeros(int(sdf_xmax/sdf_dx))
+        simulation_start_time = time.time()
         for i in range(sdf_mc):
             self.simulation.run(sdf_each_run)
             self.sdf_compute = hoomd.hpmc.compute.SDF(xmax=sdf_xmax, dx=sdf_dx)
             self.simulation.operations.computes.append(self.sdf_compute)
             self.total_sdf_sdfcompression += self.sdf_compute.sdf_compression
+            simulation_interval_time = time.time()
             if i%(sdf_mc//10)==0:
-                print(f"循环已经进行了{i}次")
+                print(f"循环已经进行了{i}次,耗时{simulation_interval_time-simulation_start_time:.2f}秒")
         self.total_sdf_xcompression = self.sdf_compute.x_compression
         self.total_sdf_sdfcompression /= sdf_mc
         return self.total_sdf_xcompression,self.total_sdf_sdfcompression

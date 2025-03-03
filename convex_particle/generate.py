@@ -10,7 +10,7 @@ import time
 
 def main():
     #粒子总数
-    num_particles = list(range(100,5100,100))
+    num_particles = list(range(2100,5100,100))
     #每次开始插入之前，先对基础的系统预处理pre_random步数
     pre_random = 1000
     #粒子的总面积/盒子面积为packing_density
@@ -20,9 +20,9 @@ def main():
     condensed_ratio=0.97
     #微小间距
     margin=0.2
-    cpu=hoomd.device.CPU()
+    gpu=hoomd.device.GPU()
     shape='A'
-    mc = hoomd.hpmc.integrate.SimplePolygon(default_d=0.5,default_a=0.2)
+    mc = hoomd.hpmc.integrate.SimplePolygon(default_d=4,default_a=0.2)
     mc.shape["A"] = dict(
                 vertices = [
                 (-2, 0),
@@ -44,8 +44,7 @@ def main():
                 packing_density_0=j,
                 particle_area=particle_area,
                 mc=mc,condensed_ratio=condensed_ratio,margin=margin,
-                pre_random=pre_random,device=cpu
-            )
+                pre_random=pre_random,device=gpu)
             system.generate_particle()
 
             print(f"\n正在预热系统，进行 {pre_random} 次移动...")

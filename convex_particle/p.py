@@ -10,20 +10,19 @@ import time
 
 def main():
     #粒子总数
-    num_particles = [250,500,750,1000,1250,1500,1750,2000,2250,2500,2750,
-                     3000,3250,3500,3750,4000,4250,4500,4750,5000]
+    num_particles = list(range(200,5200,200))
     #每次开始插入之前，先对基础的系统预处理pre_random步数
     pre_random = 2000
     #粒子的总面积/盒子面积为packing_density
-    packing_density_0=0.5
+    packing_density_0=0.3
     #packing_density = packing_density_0 * num_particles/5000
     #压缩系数
     condensed_ratio=0.98
     #微小间距
     margin=0.2
-    shape='A'
-    cpu=hoomd.device.CPU()
-    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=0.5,default_a=0.2)
+    #shape='A'
+    gpu=hoomd.device.GPU()
+    mc = hoomd.hpmc.integrate.ConvexPolygon(default_d=4,default_a=0.5)
     mc.shape["A"] = dict(
                 vertices = [
                 (-2, 0),
@@ -33,7 +32,7 @@ def main():
     )
     particle_area=5*math.sqrt(63)/4
 
-    device=cpu
+    device=gpu
 
     
     #for i in packing_density_0:
@@ -50,12 +49,12 @@ def main():
             device=device
         )
 
-        system.simulation = hoomd.Simulation(device=device,seed=1)
+        system.simulation = hoomd.Simulation(device=device,seed=20)
         system.simulation.operations.integrator = mc
         system.simulation.create_state_from_gsd(filename='./gsd/P_{:.2f}_{}.gsd'.format(packing_density_0,j))
 
         # 运行循环模拟和插入测试
-        iterations = 500              # 循环次数
+        iterations = 10000              # 循环次数
         moves_per_cycle = 5            # 每个循环中移动的成功步数
         insertions_per_cycle = 1000000    # 每个循环中插入的粒子尝试次数
 
