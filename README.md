@@ -3,7 +3,7 @@ Reproduction of an article
 
 gsd files need to be created by using the corelated gsd generate files.
 
-some rusults.
+Some rusults:
 
 !["convex_result"](result.png)
 !["concave_result"](concave_result_1.png)
